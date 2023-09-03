@@ -280,7 +280,12 @@ impl Sink<Message> for WebSocket {
 
     fn start_send(self: Pin<&mut Self>, item: Message) -> Result<(), Self::Error> {
         let result = match item {
+            #[cfg(not(feature = "cloudflare"))]
             Message::Bytes(bytes) => self.ws.send_with_u8_array(&bytes),
+            #[cfg(feature = "cloudflare")]
+            Message::Bytes(bytes) => self
+                .ws
+                .send_with_array_buffer(&js_sys::Uint8Array::from(bytes.as_slice()).buffer()),
             Message::Text(message) => self.ws.send_with_str(&message),
         };
         match result {
@@ -347,43 +352,46 @@ impl PinnedDrop for WebSocket {
 mod tests {
     use super::*;
     use futures::{SinkExt, StreamExt};
-    use wasm_bindgen_futures::spawn_local;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
 
     #[wasm_bindgen_test]
-    fn websocket_works() {
+    async fn websocket_works() {
         let ws_echo_server_url =
             option_env!("WS_ECHO_SERVER_URL").expect("Did you set WS_ECHO_SERVER_URL?");
 
         let ws = WebSocket::open(ws_echo_server_url).unwrap();
         let (mut sender, mut receiver) = ws.split();
 
-        spawn_local(async move {
-            sender
-                .send(Message::Text(String::from("test 1")))
-                .await
-                .unwrap();
-            sender
-                .send(Message::Text(String::from("test 2")))
-                .await
-                .unwrap();
-        });
+        sender
+            .send(Message::Text(String::from("test 1")))
+            .await
+            .unwrap();
+        sender
+            .send(Message::Text(String::from("test 2")))
+            .await
+            .unwrap();
+        sender
+            .send(Message::Bytes(String::from("test 3").into_bytes()))
+            .await
+            .unwrap();
 
-        spawn_local(async move {
-            // ignore first message
-            // the echo-server uses it to send it's info in the first message
-            let _ = receiver.next().await;
+        // ignore first message
+        // the echo-server uses it to send it's info in the first message
+        let _ = receiver.next().await;
 
-            assert_eq!(
-                receiver.next().await.unwrap().unwrap(),
-                Message::Text("test 1".to_string())
-            );
-            assert_eq!(
-                receiver.next().await.unwrap().unwrap(),
-                Message::Text("test 2".to_string())
-            );
-        });
+        assert_eq!(
+            receiver.next().await.unwrap().unwrap(),
+            Message::Text("test 1".to_string())
+        );
+        assert_eq!(
+            receiver.next().await.unwrap().unwrap(),
+            Message::Text("test 2".to_string())
+        );
+        assert_eq!(
+            receiver.next().await.unwrap().unwrap(),
+            Message::Bytes(String::from("test 3").into_bytes())
+        );
     }
 }
