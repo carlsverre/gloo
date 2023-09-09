@@ -258,6 +258,8 @@ fn parse_message(event: MessageEvent) -> Message {
     if let Ok(array_buffer) = event.data().dyn_into::<js_sys::ArrayBuffer>() {
         let array = js_sys::Uint8Array::new(&array_buffer);
         Message::Bytes(array.to_vec())
+    } else if let Ok(array) = event.data().dyn_into::<js_sys::Uint8Array>() {
+        Message::Bytes(array.to_vec())
     } else if let Ok(txt) = event.data().dyn_into::<js_sys::JsString>() {
         Message::Text(String::from(&txt))
     } else {
