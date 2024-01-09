@@ -48,6 +48,8 @@ once_cell = "1"
 [features]
 default = ["json", "websocket", "http", "eventsource"]
 
+cloudflare = []
+
 # Enables `.json()` on `Response`
 json = ["serde", "serde_json", "gloo-utils/serde"]
 # Enables the WebSocket API

@@ -59,6 +59,8 @@ history = ["gloo-history"]
 worker = ["gloo-worker"]
 net = ["gloo-net"]
 
+cloudflare = ["gloo-net/cloudflare"]
+
 [workspace]
 members = [
     "crates/timers",

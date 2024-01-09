@@ -265,6 +265,8 @@ fn parse_message(event: MessageEvent) -> Message {
     if let Ok(array_buffer) = event.data().dyn_into::<js_sys::ArrayBuffer>() {
         let array = js_sys::Uint8Array::new(&array_buffer);
         Message::Bytes(array.to_vec())
+    } else if let Ok(array) = event.data().dyn_into::<js_sys::Uint8Array>() {
+        Message::Bytes(array.to_vec())
     } else if let Ok(txt) = event.data().dyn_into::<js_sys::JsString>() {
         Message::Text(String::from(&txt))
     } else {
@@ -287,7 +289,12 @@ impl Sink<Message> for WebSocket {
 
     fn start_send(self: Pin<&mut Self>, item: Message) -> Result<(), Self::Error> {
         let result = match item {
+            #[cfg(not(feature = "cloudflare"))]
             Message::Bytes(bytes) => self.ws.send_with_u8_array(&bytes),
+            #[cfg(feature = "cloudflare")]
+            Message::Bytes(bytes) => self
+                .ws
+                .send_with_array_buffer(&js_sys::Uint8Array::from(bytes.as_slice()).buffer()),
             Message::Text(message) => self.ws.send_with_str(&message),
         };
         match result {
@@ -374,6 +381,10 @@ mod tests {
             .send(Message::Text(String::from("test 2")))
             .await
             .unwrap();
+        sender
+            .send(Message::Bytes(String::from("test 3").into_bytes()))
+            .await
+            .unwrap();
 
         // ignore first message
         // the echo-server uses it to send it's info in the first message
@@ -386,6 +397,10 @@ mod tests {
         assert_eq!(
             receiver.next().await.unwrap().unwrap(),
             Message::Text("test 2".to_string())
+        );
+        assert_eq!(
+            receiver.next().await.unwrap().unwrap(),
+            Message::Bytes(String::from("test 3").into_bytes())
         );
     }
 }
